@@ -21,7 +21,6 @@ class Bootstrap
         $this->logger = $this->container->get(LoggerInterface::class);
 
         // Register error & exception handlers
-        $this->registerErrorHandlers();
 
     }
 

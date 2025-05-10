@@ -46,3 +46,4 @@ $app->get('/', function ($request, $response) {
 
 // 9) Run
 $app->run();
+dsla();
