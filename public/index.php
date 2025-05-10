@@ -24,6 +24,7 @@ $app->addRoutingMiddleware();
 
 // 5) Register your CorrelationMiddleware (and any others)
 $app->add(\BIMS\Core\Middleware\CorrelationMiddleware::class);
+$app->add(\BIMS\Core\Middleware\HttpLoggingMiddleware::class);
 
 // 6) Define a demo route
 $app->get('/', function ($request, $response) {

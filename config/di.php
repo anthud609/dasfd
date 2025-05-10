@@ -12,6 +12,10 @@ use Monolog\Formatter\LineFormatter;
 use Monolog\Processor\UidProcessor;
 use Monolog\Processor\WebProcessor;
 use BIMS\Core\Middleware\CorrelationMiddleware;
+use GuzzleHttp\Client;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\MessageFormatter;
+use GuzzleHttp\Middleware;
 
 return (function (): ContainerInterface {
     $env     = $_ENV['APP_ENV'] ?? 'production';
@@ -22,15 +26,66 @@ return (function (): ContainerInterface {
     }
 
     $builder->addDefinitions([
-        // ─── Correlation Middleware ───────────────────────────────────────
+        //
+        // ─── Guzzle HTTP Client with Logging ────────────────────────────
+        //
+        'HttpClient' => function (ContainerInterface $c) {
+            $stack = HandlerStack::create();
+            // Log full request/response at DEBUG level
+            $stack->push(Middleware::log(
+                $c->get(LoggerInterface::class),
+                new MessageFormatter(MessageFormatter::DEBUG)
+            ));
+            return new Client(['handler' => $stack]);
+        },
+
+        //
+        // ─── Audit Logger (separate channel) ────────────────────────────
+        //
+        'AuditLogger' => function (ContainerInterface $c) {
+            $log = new Logger('audit');
+            $handler = new RotatingFileHandler(
+                __DIR__ . '/../logs/audit.log',
+                30,
+                Logger::INFO
+            );
+            $handler->setFormatter(new JsonFormatter());
+            $log->pushHandler($handler);
+            return $log;
+        },
+
+        //
+        // ─── Debug Logger (tail-only) ──────────────────────────────────
+        //
+        'DebugLogger' => function (ContainerInterface $c) {
+            $log = new Logger('debug');
+            $handler = new StreamHandler(
+                __DIR__ . '/../logs/debug-tail.log',
+                Logger::DEBUG
+            );
+            $handler->setFormatter(new LineFormatter(
+                format:      null,
+                dateFormat:  'c',
+                allowInlineLineBreaks: true,
+                ignoreEmptyContextAndExtra: true
+            ));
+            $log->pushHandler($handler);
+            return $log;
+        },
+
+        //
+        // ─── Correlation-ID Middleware ──────────────────────────────────
+        //
         CorrelationMiddleware::class => function (ContainerInterface $c) {
             return new CorrelationMiddleware(
                 $c->get(LoggerInterface::class)
             );
         },
 
-        // ─── PSR-3 Logger ──────────────────────────────────────────────────
-        LoggerInterface::class      => function (ContainerInterface $c) {
+        //
+        // ─── Primary PSR-3 Logger ────────────────────────────────────────
+        //
+        LoggerInterface::class => function (ContainerInterface $c) {
             $debug  = filter_var($_ENV['APP_DEBUG'] ?? false, FILTER_VALIDATE_BOOL);
             $logDir = dirname(__DIR__) . '/logs';
 
@@ -47,10 +102,10 @@ return (function (): ContainerInterface {
                 $debug ? Logger::DEBUG : Logger::INFO
             );
             $jsonFmt = new JsonFormatter(
-                batchMode: JsonFormatter::BATCH_MODE_NEWLINES,
-                appendNewline: true,
-                ignoreEmptyContextAndExtra: false,
-                includeStacktraces: false
+                batchMode:                     JsonFormatter::BATCH_MODE_NEWLINES,
+                appendNewline:                 true,
+                ignoreEmptyContextAndExtra:    false,
+                includeStacktraces:            false
             );
             $jsonFmt->setDateFormat('c');
             $jsonFmt->setJsonPrettyPrint(true);
@@ -64,8 +119,8 @@ return (function (): ContainerInterface {
                     Logger::DEBUG
                 );
                 $lineFmt = new LineFormatter(
-                    format: null,
-                    dateFormat: 'c',
+                    format:      null,
+                    dateFormat:  'c',
                     allowInlineLineBreaks: true,
                     ignoreEmptyContextAndExtra: true
                 );
@@ -81,5 +136,26 @@ return (function (): ContainerInterface {
         },
     ]);
 
-    return $builder->build();
+    // Build the container
+    $container = $builder->build();
+
+    // ─── Shutdown handler for fatal errors ─────────────────────────────
+    register_shutdown_function(function () use ($container) {
+        $err = error_get_last();
+        if (
+            $err
+            && in_array($err['type'], [
+                E_ERROR,
+                E_PARSE,
+                E_CORE_ERROR,
+                E_COMPILE_ERROR
+            ], true)
+        ) {
+            $container
+                ->get(LoggerInterface::class)
+                ->critical('Fatal shutdown error', $err);
+        }
+    });
+
+    return $container;
 })();
