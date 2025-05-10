@@ -6,6 +6,8 @@ use DI\ContainerBuilder;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Response;
 
+// ❶ Load Composer’s PSR-4 autoloader
+require __DIR__ . '/../vendor/autoload.php';
 // 1) Your existing bootstrap & container
 $bootstrap  = new Bootstrap(dirname(__DIR__));
 $container  = $bootstrap->getContainer();
