@@ -11,7 +11,9 @@ require __DIR__ . '/../vendor/autoload.php';
 // 1) Your existing bootstrap & container
 $bootstrap  = new Bootstrap(dirname(__DIR__));
 $container  = $bootstrap->getContainer();
-
+\Sentry\init([
+  'dsn' => 'https://2978578c4a02ab8f5221003d3a4eabc9@o4509296255959040.ingest.us.sentry.io/4509296257269761',
+]);
 // 2) Tell Slim to use your container
 AppFactory::setContainer($container);
 
@@ -22,9 +24,16 @@ $app = AppFactory::create();
 $app->addBodyParsingMiddleware();
 $app->addRoutingMiddleware();
 
-// 5) Register your CorrelationMiddleware (and any others)
+// 2) Then your Correlation → Logging
 $app->add(\BIMS\Core\Middleware\CorrelationMiddleware::class);
 $app->add(\BIMS\Core\Middleware\HttpLoggingMiddleware::class);
+
+// 3) Finally error handling
+$app->addErrorMiddleware(
+    (bool) ($_ENV['APP_DEBUG'] ?? false),
+    true,
+    true
+);
 
 // 6) Define a demo route
 $app->get('/', function ($request, $response) {
@@ -41,3 +50,9 @@ $app->addErrorMiddleware(
 
 // 8) Run the app
 $app->run();
+
+try {
+  $this->functionFailsForSure();
+} catch (\Throwable $exception) {
+  \Sentry\captureException($exception);
+}

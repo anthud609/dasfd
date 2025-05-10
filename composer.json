@@ -9,7 +9,8 @@
         "php-di/php-di": "^7.0",
         "slim/slim": "4.10",
         "slim/psr7": "^1.7",
-        "php-di/slim-bridge": "^3.4"
+        "php-di/slim-bridge": "^3.4",
+        "sentry/sentry": "^4.11"
     },
     "autoload": {
         "psr-4": {
