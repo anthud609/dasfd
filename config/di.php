@@ -17,6 +17,9 @@ use GuzzleHttp\HandlerStack;
 use GuzzleHttp\MessageFormatter;
 use GuzzleHttp\Middleware;
 
+// Import your AdvancedErrorHandler:
+use BIMS\Core\Error\AdvancedErrorHandler;
+
 return (function (): ContainerInterface {
     $env     = $_ENV['APP_ENV'] ?? 'production';
     $builder = new ContainerBuilder();
@@ -25,7 +28,9 @@ return (function (): ContainerInterface {
         $builder->enableCompilation(__DIR__ . '/../var/cache');
     }
 
+    // Define all services in a single array:
     $builder->addDefinitions([
+
         //
         // ─── Guzzle HTTP Client with Logging ────────────────────────────
         //
@@ -37,6 +42,15 @@ return (function (): ContainerInterface {
                 new MessageFormatter(MessageFormatter::DEBUG)
             ));
             return new Client(['handler' => $stack]);
+        },
+
+        //
+        // ─── AdvancedErrorHandler ───────────────────────────────────────
+        //
+        AdvancedErrorHandler::class => function (ContainerInterface $c) {
+            return new AdvancedErrorHandler(
+                $c->get(LoggerInterface::class)
+            );
         },
 
         //
@@ -55,7 +69,7 @@ return (function (): ContainerInterface {
         },
 
         //
-        // ─── Debug Logger (tail-only) ──────────────────────────────────
+        // ─── Debug Logger (tail-only) ───────────────────────────────────
         //
         'DebugLogger' => function (ContainerInterface $c) {
             $log = new Logger('debug');
@@ -139,7 +153,8 @@ return (function (): ContainerInterface {
     // Build the container
     $container = $builder->build();
 
-    // ─── Shutdown handler for fatal errors ─────────────────────────────
+    // ─── Optional Shutdown handler for fatal errors ─────────────────────
+    // (You can remove this if your AdvancedErrorHandler already does it.)
     register_shutdown_function(function () use ($container) {
         $err = error_get_last();
         if (

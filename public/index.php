@@ -2,57 +2,47 @@
 declare(strict_types=1);
 
 use BIMS\Core\Bootstrap;
-use DI\ContainerBuilder;
 use Slim\Factory\AppFactory;
-use Slim\Psr7\Response;
+use BIMS\Core\Error\AdvancedErrorHandler;
 
-// ❶ Load Composer’s PSR-4 autoloader
+// 1) Autoload
 require __DIR__ . '/../vendor/autoload.php';
-// 1) Your existing bootstrap & container
-$bootstrap  = new Bootstrap(dirname(__DIR__));
-$container  = $bootstrap->getContainer();
-\Sentry\init([
-  'dsn' => 'https://2978578c4a02ab8f5221003d3a4eabc9@o4509296255959040.ingest.us.sentry.io/4509296257269761',
-]);
-// 2) Tell Slim to use your container
-AppFactory::setContainer($container);
 
-// 3) Create the App
+// 2) Bootstrap + Container
+$bootstrap = new Bootstrap(dirname(__DIR__));
+$container = $bootstrap->getContainer();
+
+// 3) Initialize Sentry
+\Sentry\init([
+    'dsn' => 'https://<key>@o4509296255959040.ingest.us.sentry.io/<project>',
+    // plus any options you want
+]);
+
+// 4) Register global error handlers
+$container->get(AdvancedErrorHandler::class)->registerHandlers();
+
+// 5) Tell Slim to use your container
+AppFactory::setContainer($container);
 $app = AppFactory::create();
 
-// 4) (Optional) Add routing & body-parsing middleware
+// 6) Middlewares, routes, etc.
 $app->addBodyParsingMiddleware();
 $app->addRoutingMiddleware();
-
-// 2) Then your Correlation → Logging
 $app->add(\BIMS\Core\Middleware\CorrelationMiddleware::class);
 $app->add(\BIMS\Core\Middleware\HttpLoggingMiddleware::class);
 
-// 3) Finally error handling
+// 7) Slim's error middleware (for HTTP error responses)
 $app->addErrorMiddleware(
     (bool) ($_ENV['APP_DEBUG'] ?? false),
     true,
     true
 );
 
-// 6) Define a demo route
+// 8) Route
 $app->get('/', function ($request, $response) {
     $response->getBody()->write('Hello, Slim is installed!');
     return $response;
 });
 
-// 7) Error middleware (for detailed errors in debug)
-$app->addErrorMiddleware(
-    (bool) ($_ENV['APP_DEBUG'] ?? false),
-    true,
-    true
-);
-
-// 8) Run the app
+// 9) Run
 $app->run();
-
-try {
-  $this->functionFailsForSure();
-} catch (\Throwable $exception) {
-  \Sentry\captureException($exception);
-}
