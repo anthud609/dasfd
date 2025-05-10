@@ -8,6 +8,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Container\ContainerInterface;
 use Throwable;
 
+
 class Bootstrap
 {
     private ContainerInterface $container;
@@ -37,34 +38,34 @@ class Bootstrap
         return require $root . '/config/di.php';
     }
 
-    private function registerErrorHandlers(): void
-    {
-        set_error_handler([$this, 'handlePhpError']);
-        set_exception_handler([$this, 'handleException']);
-    }
+private function registerErrorHandlers(): void
+{
+    // no need for a local $logger; use your methods which call $this->logger
+    set_error_handler([$this, 'handlePhpError']);
+    set_exception_handler([$this, 'handleException']);
+}
 
-    public function handlePhpError(int $severity, string $message, string $file, int $line): bool
-    {
-        $this->logger->error('PHP Error', [
-            'severity' => $severity,
-            'message'  => $message,
-            'file'     => $file,
-            'line'     => $line,
-        ]);
 
-        // Return false to let the default handler run as well
-        return false;
-    }
+    
 
-    public function handleException(Throwable $e): void
-    {
-        $this->logger->critical('Uncaught Exception', [
-            'exception' => $e,
-        ]);
+   public function handlePhpError(int $severity, string $message, string $file, int $line): bool
+{
+    $this->logger->error('PHP Error', [
+        'severity' => $severity,
+        'message'  => $message,
+        'file'     => $file,
+        'line'     => $line,
+    ]);
 
-        // Optionally re-throw or exit:
-        // throw $e;
-    }
+    return false; // allow the default handler to run too
+}
+
+public function handleException(Throwable $e): void
+{
+    $this->logger->critical('Uncaught Exception', [
+        'exception' => $e,
+    ]);
+}
 
 
 

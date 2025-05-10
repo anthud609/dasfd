@@ -11,9 +11,10 @@ use Monolog\Formatter\JsonFormatter;
 use Monolog\Formatter\LineFormatter;
 use Monolog\Processor\UidProcessor;
 use Monolog\Processor\WebProcessor;
+use BIMS\Core\Middleware\CorrelationMiddleware;
 
 return (function (): ContainerInterface {
-    $env = $_ENV['APP_ENV'] ?? 'production';
+    $env     = $_ENV['APP_ENV'] ?? 'production';
     $builder = new ContainerBuilder();
 
     if ($env === 'production') {
@@ -21,18 +22,25 @@ return (function (): ContainerInterface {
     }
 
     $builder->addDefinitions([
-        LoggerInterface::class => function (ContainerInterface $c) {
-            $debug = filter_var($_ENV['APP_DEBUG'] ?? false, FILTER_VALIDATE_BOOL);
+        // ─── Correlation Middleware ───────────────────────────────────────
+        CorrelationMiddleware::class => function (ContainerInterface $c) {
+            return new CorrelationMiddleware(
+                $c->get(LoggerInterface::class)
+            );
+        },
+
+        // ─── PSR-3 Logger ──────────────────────────────────────────────────
+        LoggerInterface::class      => function (ContainerInterface $c) {
+            $debug  = filter_var($_ENV['APP_DEBUG'] ?? false, FILTER_VALIDATE_BOOL);
             $logDir = dirname(__DIR__) . '/logs';
+
             if (! is_dir($logDir)) {
                 mkdir($logDir, 0755, true);
             }
 
             $logger = new Logger('bims-core');
 
-            //
-            // ─── JSON HANDLER: 7-day rotation ─────────────────────────────────────
-            //
+            // JSON handler: 7-day rotation
             $jsonHandler = new RotatingFileHandler(
                 "$logDir/bims.json",
                 7,
@@ -49,15 +57,12 @@ return (function (): ContainerInterface {
             $jsonHandler->setFormatter($jsonFmt);
             $logger->pushHandler($jsonHandler);
 
-            //
-            // ─── TEXT HANDLER: single debug.log (only in debug) ────────────────
-            //
+            // Text handler (debug only)
             if ($debug) {
                 $textHandler = new StreamHandler(
                     "$logDir/debug.log",
                     Logger::DEBUG
                 );
-                // default line format, ISO-8601 timestamp
                 $lineFmt = new LineFormatter(
                     format: null,
                     dateFormat: 'c',
@@ -68,7 +73,7 @@ return (function (): ContainerInterface {
                 $logger->pushHandler($textHandler);
             }
 
-            // ─── COMMON PROCESSORS ────────────────────────────────────────────
+            // Common processors
             $logger->pushProcessor(new UidProcessor());
             $logger->pushProcessor(new WebProcessor());
 

@@ -1,23 +1,40 @@
 <?php
 declare(strict_types=1);
 
-require __DIR__ . '/../vendor/autoload.php';
-
 use BIMS\Core\Bootstrap;
-use Psr\Log\LoggerInterface;
+use DI\ContainerBuilder;
+use Slim\Factory\AppFactory;
+use Slim\Psr7\Response;
 
-// Instantiate all your wiring
-$bootstrap = new Bootstrap(dirname(__DIR__));
+// 1) Your existing bootstrap & container
+$bootstrap  = new Bootstrap(dirname(__DIR__));
+$container  = $bootstrap->getContainer();
 
-// Grab services from the container
-$container = $bootstrap->getContainer();
-/** @var LoggerInterface $logger */
-$logger = $bootstrap->getLogger();
+// 2) Tell Slim to use your container
+AppFactory::setContainer($container);
 
-// …here you hand off to your router/framework…
-$logger->info('Now dispatching the HTTP request');
+// 3) Create the App
+$app = AppFactory::create();
 
-// e.g., (Slim example)
-// $app = $container->get(\Slim\App::class);
-// $app->run();
-tetser();
+// 4) (Optional) Add routing & body-parsing middleware
+$app->addBodyParsingMiddleware();
+$app->addRoutingMiddleware();
+
+// 5) Register your CorrelationMiddleware (and any others)
+$app->add(\BIMS\Core\Middleware\CorrelationMiddleware::class);
+
+// 6) Define a demo route
+$app->get('/', function ($request, $response) {
+    $response->getBody()->write('Hello, Slim is installed!');
+    return $response;
+});
+
+// 7) Error middleware (for detailed errors in debug)
+$app->addErrorMiddleware(
+    (bool) ($_ENV['APP_DEBUG'] ?? false),
+    true,
+    true
+);
+
+// 8) Run the app
+$app->run();
